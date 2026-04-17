@@ -147,6 +147,7 @@ static int write_tree_level(IndexEntry *entries, int count, int depth, ObjectID 
         char *slash = strchr(subpath, '/');
         
         if (!slash) {
+            // It's a file at the current depth
             TreeEntry *te = &curr_tree.entries[curr_tree.count++];
             te->mode = entries[i].mode;
             te->hash = entries[i].hash;
