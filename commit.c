@@ -197,27 +197,21 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
 
     // 1. Author and Timestamp
     const char *author = pes_author();
-    if (!author) { fprintf(stderr, "debug: pes_author() returned NULL\n"); return -1; }
+    if (!author) return -1;
     strncpy(c.author, author, sizeof(c.author) - 1);
     c.timestamp = (uint64_t)time(NULL);
-    fprintf(stderr, "debug: author=%s\n", c.author);
 
     // 2. Parent commit (if any)
     if (head_read(&c.parent) == 0) {
         c.has_parent = 1;
-        fprintf(stderr, "debug: has parent\n");
     } else {
         c.has_parent = 0;
-        fprintf(stderr, "debug: no parent (first commit)\n");
     }
 
     // 3. Create tree from current index
-    fprintf(stderr, "debug: calling tree_from_index\n");
     if (tree_from_index(&c.tree) != 0) {
-        fprintf(stderr, "debug: tree_from_index failed\n");
         return -1;
     }
-    fprintf(stderr, "debug: tree_from_index succeeded\n");
 
     // Check if tree is identical to parent (nothing changed)
     if (c.has_parent) {
