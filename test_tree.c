@@ -37,6 +37,9 @@ void test_tree_roundtrip(void) {
     assert(len > 0);
     printf("Serialized tree: %zu bytes\n", len);
 
+    ObjectID saved_id;
+    object_write(OBJ_TREE, data, len, &saved_id);
+
     // Parse back
     Tree parsed;
     rc = tree_parse(data, len, &parsed);
