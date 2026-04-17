@@ -133,9 +133,61 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 //   - object_write    : save that binary buffer to the store as OBJ_TREE
 //
 // Returns 0 on success, -1 on error.
+static int write_tree_level(IndexEntry *entries, int count, int depth, ObjectID *out_id) {
+    Tree curr_tree;
+    curr_tree.count = 0;
+
+    int i = 0;
+    while (i < count && curr_tree.count < MAX_TREE_ENTRIES) {
+        const char *subpath = entries[i].path + depth;
+        char *slash = strchr(subpath, '/');
+        
+        if (!slash) {
+            TreeEntry *te = &curr_tree.entries[curr_tree.count++];
+            te->mode = entries[i].mode;
+            te->hash = entries[i].hash;
+            strcpy(te->name, subpath);
+            i++;
+        } else {
+            size_t dir_len = slash - subpath;
+            int j = i;
+            while (j < count) {
+                const char *j_subpath = entries[j].path + depth;
+                char *j_slash = strchr(j_subpath, '/');
+                if (j_slash && (size_t)(j_slash - j_subpath) == dir_len &&
+                    strncmp(subpath, j_subpath, dir_len) == 0) {
+                    j++;
+                } else {
+                    break;
+                }
+            }
+            
+            TreeEntry *te = &curr_tree.entries[curr_tree.count++];
+            te->mode = MODE_DIR;
+            strncpy(te->name, subpath, dir_len);
+            te->name[dir_len] = '\0';
+            
+            ObjectID subtree_id;
+            if (write_tree_level(&entries[i], j - i, depth + dir_len + 1, &subtree_id) != 0) {
+                return -1;
+            }
+            te->hash = subtree_id;
+            
+            i = j;
+        }
+    }
+    
+    void *data;
+    size_t len;
+    if (tree_serialize(&curr_tree, &data, &len) != 0) return -1;
+    
+    int rc = object_write(OBJ_TREE, data, len, out_id);
+    free(data);
+    return rc;
+}
+
 int tree_from_index(ObjectID *id_out) {
-    // TODO: Implement recursive tree building
-    // (See Lab Appendix for logical steps)
-    (void)id_out;
-    return -1;
+    Index idx;
+    if (index_load(&idx) != 0) return -1;
+    return write_tree_level(idx.entries, idx.count, 0, id_out);
 }
