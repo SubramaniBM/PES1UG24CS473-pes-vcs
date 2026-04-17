@@ -173,9 +173,16 @@ int head_update(const ObjectID *new_commit) {
     fprintf(f, "%s\n", hex);
     
     fflush(f);
+#if defined(_WIN32) || defined(__MINGW32__)
+    _commit(fileno(f));
+#else
     fsync(fileno(f));
+#endif
     fclose(f);
-    
+
+#if defined(_WIN32) || defined(__MINGW32__)
+    remove(target_path);
+#endif
     return rename(tmp_path, target_path);
 }
 
