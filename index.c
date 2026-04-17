@@ -145,10 +145,19 @@ int index_status(const Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_load(Index *index) {
-  // TODO: Implement index loading
-  // (See Lab Appendix for logical steps)
-  (void)index;
-  return -1;
+  index->count = 0;
+  FILE *f = fopen(".pes/index", "r");
+  if (!f) return 0;
+  while (index->count < MAX_INDEX_ENTRIES) {
+    IndexEntry *e = &index->entries[index->count];
+    char hash_str[65];
+    int parsed = fscanf(f, "%o %64s %lu %u %511[^\n]", &e->mode, hash_str, (unsigned long *)&e->mtime_sec, &e->size, e->path);
+    if (parsed == EOF) break;
+    if (parsed != 5 || hex_to_hash(hash_str, &e->hash) != 0) { fclose(f); return -1; }
+    index->count++;
+  }
+  fclose(f);
+  return 0;
 }
 
 // Save the index to .pes/index atomically.
@@ -163,11 +172,42 @@ int index_load(Index *index) {
 //   the old index
 //
 // Returns 0 on success, -1 on error.
+static int cmp_entries(const void *a, const void *b) {
+    return strcmp(((const IndexEntry *)a)->path, ((const IndexEntry *)b)->path);
+}
+
 int index_save(const Index *index) {
-  // TODO: Implement atomic index saving
-  // (See Lab Appendix for logical steps)
-  (void)index;
-  return -1;
+  qsort((void *)index->entries, index->count, sizeof(IndexEntry), cmp_entries);
+  char tmp_path[] = ".pes/index.tmp.XXXXXX";
+  int fd;
+#if defined(_WIN32) || defined(__MINGW32__)
+  strcpy(tmp_path, ".pes/index.tmp.XXXXXX");
+  char *res = _mktemp(tmp_path);
+  if (!res) return -1;
+  fd = open(tmp_path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+#else
+  fd = mkstemp(tmp_path);
+#endif
+  if (fd < 0) return -1;
+  FILE *f = fdopen(fd, "w");
+  if (!f) { close(fd); return -1; }
+  for (int i = 0; i < index->count; i++) {
+    const IndexEntry *e = &index->entries[i];
+    char hash_str[65]; hash_to_hex(&e->hash, hash_str);
+    fprintf(f, "%o %s %lu %u %s\n", e->mode, hash_str, (unsigned long)e->mtime_sec, e->size, e->path);
+  }
+  fflush(f);
+#if defined(_WIN32) || defined(__MINGW32__)
+  _commit(fileno(f));
+#else
+  fsync(fileno(f));
+#endif
+  fclose(f);
+#if defined(_WIN32) || defined(__MINGW32__)
+  remove(".pes/index");
+#endif
+  if (rename(tmp_path, ".pes/index") != 0) { remove(tmp_path); return -1; }
+  return 0;
 }
 
 // Stage a file for the next commit.
@@ -180,10 +220,41 @@ int index_save(const Index *index) {
 //   - index_find                       : checking if the file is already staged
 //
 // Returns 0 on success, -1 on error.
+int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
+
 int index_add(Index *index, const char *path) {
-  // TODO: Implement file staging
-  // (See Lab Appendix for logical steps)
-  (void)index;
-  (void)path;
-  return -1;
+  struct stat st;
+#if defined(_WIN32) || defined(__MINGW32__)
+  if (stat(path, &st) != 0) return -1;
+#else
+  if (lstat(path, &st) != 0) return -1;
+#endif
+  if (!S_ISREG(st.st_mode)) return -1;
+  FILE *f = fopen(path, "rb");
+  if (!f) return -1;
+  void *data = NULL;
+  if (st.st_size > 0) {
+    data = malloc(st.st_size);
+    if (!data || fread(data, 1, st.st_size, f) != (size_t)st.st_size) {
+      free(data); fclose(f); return -1;
+    }
+  }
+  fclose(f);
+  ObjectID file_hash;
+  if (object_write(OBJ_BLOB, data ? data : "", st.st_size, &file_hash) != 0) {
+    free(data); return -1;
+  }
+  free(data);
+  IndexEntry *e = index_find(index, path);
+  if (!e) {
+    if (index->count >= MAX_INDEX_ENTRIES) return -1;
+    e = &index->entries[index->count++];
+    strncpy(e->path, path, sizeof(e->path) - 1);
+    e->path[sizeof(e->path) - 1] = '\0';
+  }
+  e->mode = (st.st_mode & S_IXUSR) ? 0100755 : 0100644;
+  e->hash = file_hash;
+  e->mtime_sec = st.st_mtime;
+  e->size = st.st_size;
+  return index_save(index);
 }
