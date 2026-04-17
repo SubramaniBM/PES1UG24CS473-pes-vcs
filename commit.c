@@ -212,6 +212,7 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     }
 
     // 4. Commit message
+    if (!message) return -1;
     strncpy(c.message, message, sizeof(c.message) - 1);
     c.message[sizeof(c.message) - 1] = '\0';
 
