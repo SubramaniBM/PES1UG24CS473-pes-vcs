@@ -11,6 +11,9 @@
 #include <assert.h>
 #include <stdlib.h>
 
+// Forward declaration
+int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
+
 void test_tree_roundtrip(void) {
     // Build a tree manually
     Tree original;
