@@ -196,7 +196,9 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     memset(&c, 0, sizeof(Commit));
 
     // 1. Author and Timestamp
-    strncpy(c.author, pes_author(), sizeof(c.author) - 1);
+    const char *author = pes_author();
+    if (!author) return -1;
+    strncpy(c.author, author, sizeof(c.author) - 1);
     c.timestamp = (uint64_t)time(NULL);
 
     // 2. Parent commit (if any)
