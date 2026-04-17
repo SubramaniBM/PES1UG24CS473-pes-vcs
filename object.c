@@ -217,7 +217,45 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
     }
     fclose(f);
     
-    // Header parsing and integrity verification to follow
+    ObjectID computed_id;
+    compute_hash(buffer, file_size, &computed_id);
+    if (memcmp(computed_id.hash, id->hash, HASH_SIZE) != 0) {
+        free(buffer);
+        return -1;
+    }
+
+    uint8_t *null_byte = memchr(buffer, '\0', file_size);
+    if (!null_byte) {
+        free(buffer);
+        return -1;
+    }
+
+    if (strncmp((char *)buffer, "blob ", 5) == 0) {
+        if (type_out) *type_out = OBJ_BLOB;
+    } else if (strncmp((char *)buffer, "tree ", 5) == 0) {
+        if (type_out) *type_out = OBJ_TREE;
+    } else if (strncmp((char *)buffer, "commit ", 7) == 0) {
+        if (type_out) *type_out = OBJ_COMMIT;
+    } else {
+        free(buffer);
+        return -1;
+    }
+
+    size_t header_len = null_byte - buffer;
+    size_t data_len = file_size - header_len - 1;
+    if (len_out) *len_out = data_len;
+
+    if (data_out) {
+        *data_out = malloc(data_len > 0 ? data_len : 1);
+        if (!*data_out) {
+            free(buffer);
+            return -1;
+        }
+        if (data_len > 0) {
+            memcpy(*data_out, null_byte + 1, data_len);
+        }
+    }
+
     free(buffer);
     return 0;
 }
