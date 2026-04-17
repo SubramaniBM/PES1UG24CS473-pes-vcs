@@ -112,6 +112,57 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     ObjectID computed_id;
     compute_hash(full_obj, full_len, &computed_id);
 
+    if (object_exists(&computed_id)) {
+        if (id_out) *id_out = computed_id;
+        free(full_obj);
+        return 0;
+    }
+
+    char final_path[512];
+    object_path(&computed_id, final_path, sizeof(final_path));
+
+    char shard_dir[16];
+    strncpy(shard_dir, final_path, 15);
+    shard_dir[15] = '\0';
+
+#if defined(_WIN32) || defined(__MINGW32__)
+    mkdir(shard_dir); // mkdir on windows takes 1 argument
+#else
+    mkdir(shard_dir, 0755);
+#endif
+
+    char temp_path[512];
+    snprintf(temp_path, sizeof(temp_path), "%s/tmp_XXXXXX", shard_dir);
+    
+    int fd = mkstemp(temp_path);
+    if (fd < 0) {
+        free(full_obj);
+        return -1;
+    }
+
+    if (write(fd, full_obj, full_len) != (ssize_t)full_len) {
+        close(fd);
+        unlink(temp_path);
+        free(full_obj);
+        return -1;
+    }
+
+    fsync(fd);
+    close(fd);
+
+    if (rename(temp_path, final_path) != 0) {
+        unlink(temp_path);
+        free(full_obj);
+        return -1;
+    }
+
+    int dir_fd = open(shard_dir, O_RDONLY);
+    if (dir_fd >= 0) {
+        fsync(dir_fd);
+        close(dir_fd);
+    }
+
+    if (id_out) *id_out = computed_id;
     free(full_obj);
     return 0;
 }
