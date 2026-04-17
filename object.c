@@ -17,6 +17,10 @@
 #include <unistd.h>
 #include <openssl/evp.h>
 
+#if defined(_WIN32) || defined(__MINGW32__)
+#include <io.h>
+#define fsync _commit
+#endif
 // ─── PROVIDED ────────────────────────────────────────────────────────────────
 
 void hash_to_hex(const ObjectID *id, char *hex_out) {
