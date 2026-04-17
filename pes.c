@@ -15,6 +15,15 @@
 
 // Usage: pes init
 void cmd_init(void) {
+#if defined(_WIN32) || defined(__MINGW32__)
+    if (mkdir(PES_DIR) != 0 && access(PES_DIR, F_OK) != 0) {
+        fprintf(stderr, "error: failed to create %s\n", PES_DIR);
+        return;
+    }
+    mkdir(OBJECTS_DIR);
+    mkdir(".pes/refs");
+    mkdir(REFS_DIR);
+#else
     if (mkdir(PES_DIR, 0755) != 0 && access(PES_DIR, F_OK) != 0) {
         fprintf(stderr, "error: failed to create %s\n", PES_DIR);
         return;
@@ -22,6 +31,7 @@ void cmd_init(void) {
     mkdir(OBJECTS_DIR, 0755);
     mkdir(".pes/refs", 0755);
     mkdir(REFS_DIR, 0755);
+#endif
 
     if (access(HEAD_FILE, F_OK) != 0) {
         FILE *f = fopen(HEAD_FILE, "w");
