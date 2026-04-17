@@ -99,8 +99,13 @@ void test_tree_determinism(void) {
 
 int main(void) {
     int rc __attribute__((unused));
+#if defined(_WIN32) || defined(__MINGW32__)
+    rc = system("rmdir /s /q .pes >nul 2>&1");
+    rc = system("mkdir .pes\\objects .pes\\refs\\heads >nul 2>&1");
+#else
     rc = system("rm -rf .pes");
     rc = system("mkdir -p .pes/objects .pes/refs/heads");
+#endif
 
     test_tree_roundtrip();
     test_tree_determinism();
