@@ -213,6 +213,24 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
         return -1;
     }
 
+    // Check if tree is identical to parent (nothing changed)
+    if (c.has_parent) {
+        ObjectType ptype;
+        void *praw;
+        size_t plen;
+        if (object_read(&c.parent, &ptype, &praw, &plen) == 0) {
+            Commit pcommit;
+            if (commit_parse(praw, plen, &pcommit) == 0) {
+                if (memcmp(&c.tree, &pcommit.tree, sizeof(ObjectID)) == 0) {
+                    free(praw);
+                    fprintf(stderr, "error: nothing to commit, working tree clean\n");
+                    return -1;
+                }
+            }
+            free(praw);
+        }
+    }
+
     // 4. Commit message
     if (!message || message[0] == '\0') return -1;
     strncpy(c.message, message, sizeof(c.message) - 1);
